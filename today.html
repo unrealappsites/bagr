@@ -300,6 +300,7 @@ function renderBrief() {
       <h3>${greeting}</h3>
       <p class="brief-empty" id="brief-status-line">Nothing on today's timetable${weekLetter ? ` (week ${weekLetter})` : ''}. Nothing to grab before you head out.</p>
       ${forgottenLine}`;
+    maybeEnhanceBriefWithAI({ daySlots: [], needed: [], missing: [], forgotten: forgotten.map(i => i.name), weekLetter });
     return;
   }
 
@@ -323,6 +324,34 @@ function renderBrief() {
       : `<p class="brief-status ok" id="brief-status-line">✓ Everything's packed for today</p>`}
     ${rows}
     ${forgottenLine}`;
+
+  maybeEnhanceBriefWithAI({
+    daySlots: daySlots.map(s => s.label),
+    needed: needed.map(i => i.name),
+    missing: missing.map(i => i.name),
+    forgotten: forgotten.map(i => i.name),
+    weekLetter
+  });
+}
+
+// Ultimate-only: ask the ai-brief edge function (backed by a free Hugging
+// Face model, not a paid API) to turn the template line above into a
+// natural sentence. Silently does nothing if the user isn't entitled, the
+// HF call is slow/cold-starting/rate-limited, or anything else goes wrong —
+// the plain template line already rendered is always a valid brief on its
+// own, so there's no loading state or error state to show here.
+async function maybeEnhanceBriefWithAI(payload) {
+  try {
+    const { data, error } = await sb.functions.invoke('ai-brief', { body: payload });
+    if (error || !data || !data.entitled || !data.brief) return;
+    const line = document.getElementById('brief-status-line');
+    if (line) {
+      line.textContent = data.brief;
+      line.classList.remove('warn', 'ok');
+    }
+  } catch (err) {
+    // Non-fatal — template brief stands.
+  }
 }
 
 function render() {
