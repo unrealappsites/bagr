@@ -53,6 +53,15 @@
   }
   .week-tab.active { background: var(--amber); }
   .modal-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+
+  #nl-entry-card h3 { font-size: 1rem; margin-bottom: 0.6rem; }
+  #nl-entry-card textarea {
+    width: 100%; min-height: 70px; padding: 0.6rem; border: 2px solid var(--ink);
+    border-radius: var(--radius); font-family: var(--body); resize: vertical;
+  }
+  #nl-entry-card .nl-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+  #nl-entry-card .nl-status { font-size: 0.85rem; color: var(--slate); }
+  #nl-entry-card .nl-status.error { color: var(--stamp); }
 </style>
 </head>
 <body>
@@ -62,6 +71,8 @@
   <main class="app-main">
     <h1 style="font-size:1.8rem; margin-bottom:0.4rem;">Your timetable</h1>
     <p class="label" style="margin-bottom:1.25rem;">what recurs, and what it requires</p>
+
+    <div id="nl-entry-card" class="card" style="max-width:640px; margin-bottom:1.5rem;"><!-- populated by JS --></div>
 
     <div class="week-tabs" id="week-tabs" style="display:none;"></div>
 
@@ -95,6 +106,12 @@ async function init() {
   const userId = session.user.id;
   [allSlots, allItems, profile] = await Promise.all([fetchSlots(userId), fetchItems(userId), fetchProfile(userId)]);
 
+  renderWeekTabs();
+  renderNlEntryCard();
+  render();
+}
+
+function renderWeekTabs() {
   if (profile && profile.has_ab_weeks) {
     document.getElementById('week-tabs').style.display = 'flex';
     document.getElementById('week-tabs').innerHTML = `
@@ -102,8 +119,9 @@ async function init() {
       <button class="week-tab" onclick="setWeekTab('A', this)">Week A</button>
       <button class="week-tab" onclick="setWeekTab('B', this)">Week B</button>
     `;
+  } else {
+    document.getElementById('week-tabs').style.display = 'none';
   }
-  render();
 }
 
 function setWeekTab(letter, btn) {
@@ -203,6 +221,92 @@ async function saveSlot() {
   allSlots.push(data);
   closeModal();
   render();
+}
+
+// Bagr Ultimate — natural-language timetable setup. This function only
+// PROPOSES a slot (via parse-timetable-entry, a free Hugging Face call) —
+// it never writes anything itself. It prefills the existing "New slot"
+// modal with what got parsed, so the person still reviews and confirms
+// (or edits) before saveSlot() actually writes to the database, exactly
+// the same path as adding a slot manually.
+async function renderNlEntryCard() {
+  const card = document.getElementById('nl-entry-card');
+  const { data: sub } = await sb.from('subscriptions').select('tier').eq('user_id', session.user.id).maybeSingle();
+
+  if (!sub || sub.tier !== 'ultimate') {
+    card.innerHTML = `<p class="label">🔒 Describe your week in plain English and let Bagr build the slot for you — that's a <a href="upgrade.html">Bagr Ultimate</a> feature.</p>`;
+    return;
+  }
+
+  card.innerHTML = `
+    <h3>Describe a slot</h3>
+    <textarea id="nl-text-input" placeholder="e.g. every other Tuesday I have football, need shin pads and a water bottle"></textarea>
+    <div class="nl-actions">
+      <button class="btn amber" id="nl-parse-btn" onclick="parseTimetableEntry()">Parse with AI</button>
+      <span class="nl-status" id="nl-status"></span>
+    </div>`;
+}
+
+async function parseTimetableEntry() {
+  const input = document.getElementById('nl-text-input');
+  const status = document.getElementById('nl-status');
+  const btn = document.getElementById('nl-parse-btn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  btn.disabled = true;
+  status.className = 'nl-status';
+  status.textContent = 'Reading that…';
+
+  try {
+    const { data, error } = await sb.functions.invoke('parse-timetable-entry', { body: { text } });
+    if (error) throw error;
+
+    if (!data.entitled) {
+      status.className = 'nl-status error';
+      status.textContent = "That's a Bagr Ultimate feature — head to the Upgrade tab.";
+      return;
+    }
+    if (data.error) {
+      status.className = 'nl-status error';
+      status.textContent = data.error;
+      return;
+    }
+
+    // Enable A/B weeks on the fly if this is the first alternating slot
+    // anyone's described, so the parsed result actually has somewhere to go.
+    if (data.alternating && !profile?.has_ab_weeks) {
+      const { data: updated, error: profErr } = await sb.from('profiles')
+        .update({ has_ab_weeks: true, ab_reference_date: new Date().toISOString().slice(0, 10), ab_reference_week: 'A' })
+        .eq('user_id', session.user.id)
+        .select().single();
+      if (!profErr) {
+        profile = updated;
+        renderWeekTabs();
+      }
+    }
+
+    if (profile?.has_ab_weeks) {
+      activeWeekTab = data.alternating ? 'A' : null;
+      document.querySelectorAll('.week-tab').forEach(b => b.classList.remove('active'));
+      const targetLabel = data.alternating ? 'Week A' : 'Both weeks';
+      const targetBtn = [...document.querySelectorAll('.week-tab')].find(b => b.textContent.trim() === targetLabel);
+      if (targetBtn) targetBtn.classList.add('active');
+    }
+    render();
+
+    openModal(data.day_of_week);
+    document.getElementById('slot-label-input').value = data.label;
+    document.getElementById('slot-items-input').value = data.items.join(', ');
+
+    status.textContent = '';
+    input.value = '';
+  } catch (err) {
+    status.className = 'nl-status error';
+    status.textContent = "Couldn't reach the parser — try again, or add it manually below.";
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 init();
