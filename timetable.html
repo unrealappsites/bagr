@@ -92,6 +92,33 @@
   #nl-entry-card .nl-parse-btn:disabled { opacity: 0.7; cursor: default; }
   #nl-entry-card .nl-spin { animation: nl-spin 0.8s linear infinite; }
   @keyframes nl-spin { to { transform: rotate(360deg); } }
+
+  /* "Thinking" glow, Bagr-coloured — box-shadow isn't clipped by the card's
+     own overflow:hidden, so this bleeds outside the card cleanly. */
+  #nl-entry-card.parsing {
+    animation: bagr-ai-glow 2.4s ease-in-out infinite;
+    border-color: transparent;
+  }
+  #nl-entry-card.parsing::before {
+    height: 100%;
+    background: linear-gradient(120deg, var(--amber), #F4CE8C, var(--ink), var(--amber));
+    background-size: 300% 300%;
+    opacity: 0.16;
+    animation: bagr-ai-sheen 2.4s ease-in-out infinite;
+  }
+  @keyframes bagr-ai-glow {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(232,163,60,0.5), 0 0 22px 2px rgba(232,163,60,0.35); }
+    35%      { box-shadow: 0 0 0 2px rgba(232,163,60,0.7), 0 0 40px 10px rgba(232,163,60,0.5); }
+    65%      { box-shadow: 0 0 0 2px rgba(23,27,36,0.4), 0 0 40px 10px rgba(23,27,36,0.3); }
+  }
+  @keyframes bagr-ai-sheen {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #nl-entry-card.parsing { animation: none; box-shadow: 0 0 24px 4px rgba(232,163,60,0.4); }
+    #nl-entry-card.parsing::before { animation: none; }
+  }
   #nl-entry-card .nl-status {
     font-size: 0.85rem; color: var(--slate); display: flex; align-items: center; gap: 0.4rem;
   }
@@ -307,6 +334,7 @@ function useNlExample(btn) {
 }
 
 async function parseTimetableEntry() {
+  const card = document.getElementById('nl-entry-card');
   const input = document.getElementById('nl-text-input');
   const status = document.getElementById('nl-status');
   const btn = document.getElementById('nl-parse-btn');
@@ -319,8 +347,9 @@ async function parseTimetableEntry() {
   btn.innerHTML = `${spinSvg}<span>Reading that…</span>`;
   status.className = 'nl-status';
   status.textContent = '';
+  card.classList.add('parsing');
 
-  const resetButton = () => { btn.disabled = false; btn.innerHTML = idleBtnHtml; };
+  const resetButton = () => { btn.disabled = false; btn.innerHTML = idleBtnHtml; card.classList.remove('parsing'); };
 
   try {
     const { data, error } = await sb.functions.invoke('parse-timetable-entry', { body: { text } });
@@ -355,6 +384,7 @@ async function parseTimetableEntry() {
       resetButton();
       return;
     }
+    card.classList.remove('parsing');
 
     // Enable A/B weeks on the fly if this is the first alternating slot
     // anyone's described, so the parsed result actually has somewhere to go.
