@@ -54,14 +54,50 @@
   .week-tab.active { background: var(--amber); }
   .modal-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
 
-  #nl-entry-card h3 { font-size: 1rem; margin-bottom: 0.6rem; }
-  #nl-entry-card textarea {
-    width: 100%; min-height: 70px; padding: 0.6rem; border: 2px solid var(--ink);
-    border-radius: var(--radius); font-family: var(--body); resize: vertical;
+  #nl-entry-card {
+    position: relative;
+    background: linear-gradient(180deg, rgba(232,163,60,0.08), rgba(232,163,60,0) 60%);
+    border-color: var(--ink);
+    overflow: hidden;
   }
-  #nl-entry-card .nl-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
-  #nl-entry-card .nl-status { font-size: 0.85rem; color: var(--slate); }
+  #nl-entry-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--amber), transparent 85%);
+  }
+  #nl-entry-card .nl-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; }
+  #nl-entry-card .nl-sparkle { flex-shrink: 0; color: var(--amber); }
+  #nl-entry-card h3 { font-size: 1rem; margin: 0; }
+  #nl-entry-card .nl-tag {
+    font-family: var(--mono); font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.06em; background: var(--amber); color: var(--ink);
+    padding: 0.1rem 0.45rem; border-radius: 999px; margin-left: 0.15rem;
+  }
+  #nl-entry-card .nl-subcopy { font-size: 0.85rem; color: var(--slate); margin: 0.35rem 0 0.9rem; }
+  #nl-entry-card textarea {
+    width: 100%; min-height: 74px; padding: 0.75rem; border: 2px solid var(--ink);
+    border-radius: var(--radius); font-family: var(--body); font-size: 0.95rem;
+    resize: vertical; background: var(--paper); transition: border-color 0.15s ease;
+  }
+  #nl-entry-card textarea:focus { outline: none; border-color: var(--amber); }
+  #nl-entry-card .nl-examples { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+  #nl-entry-card .nl-example-chip {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--slate);
+    background: var(--paper-dim); border: 1px solid transparent; border-radius: 999px;
+    padding: 0.3rem 0.65rem; cursor: pointer; transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  #nl-entry-card .nl-example-chip:hover { border-color: var(--amber); color: var(--ink); }
+  #nl-entry-card .nl-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+  #nl-entry-card .nl-parse-btn { display: inline-flex; align-items: center; gap: 0.45rem; }
+  #nl-entry-card .nl-parse-btn .nl-sparkle { color: var(--ink); }
+  #nl-entry-card .nl-parse-btn:disabled { opacity: 0.7; cursor: default; }
+  #nl-entry-card .nl-spin { animation: nl-spin 0.8s linear infinite; }
+  @keyframes nl-spin { to { transform: rotate(360deg); } }
+  #nl-entry-card .nl-status {
+    font-size: 0.85rem; color: var(--slate); display: flex; align-items: center; gap: 0.4rem;
+  }
   #nl-entry-card .nl-status.error { color: var(--stamp); }
+  #nl-entry-card .nl-locked { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+  #nl-entry-card .nl-locked a { color: var(--ink); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -233,18 +269,41 @@ async function renderNlEntryCard() {
   const card = document.getElementById('nl-entry-card');
   const { data: sub } = await sb.from('subscriptions').select('tier').eq('user_id', session.user.id).maybeSingle();
 
+  const sparkleSvg = `<svg class="nl-sparkle" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 3.4 2.4 5.4 6 6-3.6.6-5.4 2.6-6 6-.6-3.4-2.4-5.4-6-6 3.6-.6 5.4-2.6 6-6z"/></svg>`;
+
   if (!sub || sub.tier !== 'ultimate') {
-    card.innerHTML = `<p class="label">🔒 Describe your week in plain English and let Bagr build the slot for you — that's a <a href="upgrade.html">Bagr Ultimate</a> feature.</p>`;
+    card.innerHTML = `
+      <div class="nl-locked">
+        ${sparkleSvg}
+        <span>Describe your week in plain English and let Bagr build the slot for you — that's a <a href="upgrade.html">Bagr Ultimate</a> feature.</span>
+      </div>`;
     return;
   }
 
   card.innerHTML = `
-    <h3>Describe a slot</h3>
+    <div class="nl-header">
+      ${sparkleSvg}
+      <h3>Describe a slot</h3>
+      <span class="nl-tag">Ultimate</span>
+    </div>
+    <p class="nl-subcopy">Type it like you'd tell a friend — Bagr figures out the day, whether it alternates, and what you need.</p>
     <textarea id="nl-text-input" placeholder="e.g. every other Tuesday I have football, need shin pads and a water bottle"></textarea>
+    <div class="nl-examples">
+      <button type="button" class="nl-example-chip" onclick="useNlExample(this)">gym Mondays and Thursdays, trainers and a towel</button>
+      <button type="button" class="nl-example-chip" onclick="useNlExample(this)">swimming every Friday, need goggles</button>
+      <button type="button" class="nl-example-chip" onclick="useNlExample(this)">every other Wednesday, orchestra — bring my violin</button>
+    </div>
     <div class="nl-actions">
-      <button class="btn amber" id="nl-parse-btn" onclick="parseTimetableEntry()">Parse with AI</button>
+      <button class="btn amber nl-parse-btn" id="nl-parse-btn" onclick="parseTimetableEntry()">
+        ${sparkleSvg}<span id="nl-parse-btn-label">Parse with AI</span>
+      </button>
       <span class="nl-status" id="nl-status"></span>
     </div>`;
+}
+
+function useNlExample(btn) {
+  document.getElementById('nl-text-input').value = btn.textContent;
+  document.getElementById('nl-text-input').focus();
 }
 
 async function parseTimetableEntry() {
@@ -254,9 +313,14 @@ async function parseTimetableEntry() {
   const text = input.value.trim();
   if (!text) return;
 
+  const idleBtnHtml = btn.innerHTML;
   btn.disabled = true;
+  const spinSvg = `<svg class="nl-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>`;
+  btn.innerHTML = `${spinSvg}<span>Reading that…</span>`;
   status.className = 'nl-status';
-  status.textContent = 'Reading that…';
+  status.textContent = '';
+
+  const resetButton = () => { btn.disabled = false; btn.innerHTML = idleBtnHtml; };
 
   try {
     const { data, error } = await sb.functions.invoke('parse-timetable-entry', { body: { text } });
@@ -265,11 +329,13 @@ async function parseTimetableEntry() {
     if (!data.entitled) {
       status.className = 'nl-status error';
       status.textContent = "That's a Bagr Ultimate feature — head to the Upgrade tab.";
+      resetButton();
       return;
     }
     if (data.error) {
       status.className = 'nl-status error';
       status.textContent = data.error;
+      resetButton();
       return;
     }
 
@@ -299,13 +365,13 @@ async function parseTimetableEntry() {
     document.getElementById('slot-label-input').value = data.label;
     document.getElementById('slot-items-input').value = data.items.join(', ');
 
-    status.textContent = '';
-    input.value = '';
+    // Clean slate for next time — safe to fully rebuild since the modal now
+    // holds everything the person needs to see.
+    renderNlEntryCard();
   } catch (err) {
     status.className = 'nl-status error';
     status.textContent = "Couldn't reach the parser — try again, or add it manually below.";
-  } finally {
-    btn.disabled = false;
+    resetButton();
   }
 }
 
