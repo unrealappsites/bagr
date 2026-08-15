@@ -324,7 +324,24 @@ async function parseTimetableEntry() {
 
   try {
     const { data, error } = await sb.functions.invoke('parse-timetable-entry', { body: { text } });
-    if (error) throw error;
+
+    if (error) {
+      // supabase-js treats any non-2xx response as an error and drops the
+      // JSON body into `error.context` instead of `data` — read it back out
+      // so real server-side errors (bad/missing key, HF timeout, etc.) show
+      // their actual message instead of a generic "couldn't reach" fallback.
+      let msg = "Couldn't reach the parser — try again, or add it manually below.";
+      try {
+        const body = await error.context.json();
+        if (body?.error) msg = body.error;
+      } catch {
+        // context wasn't JSON — stick with the generic message
+      }
+      status.className = 'nl-status error';
+      status.textContent = msg;
+      resetButton();
+      return;
+    }
 
     if (!data.entitled) {
       status.className = 'nl-status error';
