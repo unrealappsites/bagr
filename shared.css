@@ -159,3 +159,27 @@ button { font-family: var(--body); cursor: pointer; }
   letter-spacing: 0.08em;
   color: var(--slate);
 }
+
+/* In-app launch splash — bridges the gap between the native OS splash image
+   (which iOS drops the instant the page starts painting) and the app
+   actually having real data to show. Shown immediately on load, hidden by
+   JS once init() has real content ready. Visually matches the
+   apple-touch-startup-image PNGs so the handoff is seamless. */
+#launch-splash {
+  position: fixed; inset: 0; z-index: 999;
+  background: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.35s ease;
+}
+#launch-splash.hide { opacity: 0; pointer-events: none; }
+#launch-splash .ls-wordmark {
+  font-family: var(--display); font-weight: 700; font-size: 11vw;
+  color: var(--ink); letter-spacing: -0.01em; line-height: 1;
+  display: flex; align-items: flex-end;
+}
+#launch-splash .ls-wordmark .dot { color: var(--amber); }
+#launch-splash .ls-sticker {
+  position: absolute;
+  filter: drop-shadow(0 1.2vw 1.6vw rgba(23,27,36,0.18));
+}
+#launch-splash .ls-sticker svg { width: 100%; height: 100%; display: block; }
