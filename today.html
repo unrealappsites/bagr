@@ -231,6 +231,25 @@
   </div>
   <div class="ls-wordmark">bagr<span class="dot">.</span></div>
 </div>
+<script>
+  // Only a genuine cold launch (fresh app open) should show this — tapping
+  // "Today" from elsewhere in the app is a normal page load too, since this
+  // is a multi-page app, not a SPA. sessionStorage tells the two apart:
+  // it survives in-app navigation but resets when the app is actually
+  // closed and relaunched. Runs synchronously, before the rest of the body
+  // parses, so there's no flash of the overlay when it shouldn't show.
+  //
+  // The flag is set here, immediately — not after init() succeeds below —
+  // because "is this a fresh session" has nothing to do with whether the
+  // async session check later succeeds. Setting it only on success meant a
+  // slow or redirecting auth check could leave the flag never set, and the
+  // splash would keep reappearing on every load.
+  if (sessionStorage.getItem('bagr-launched')) {
+    document.getElementById('launch-splash').remove();
+  } else {
+    sessionStorage.setItem('bagr-launched', '1');
+  }
+</script>
 <div class="app-shell">
   <nav class="app-nav"></nav>
 
